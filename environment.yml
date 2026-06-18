@@ -1,0 +1,12 @@
+name: piano-hand
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.11
+  - pip
+  - ffmpeg
+  - fluidsynth
+  - pip:
+      - -e .[dev]
