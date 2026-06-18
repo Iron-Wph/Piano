@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from piano_hand.models.note import FingerSource, Hand, NoteEvent
+from piano_hand.motion.hand_pose import HandPoseFactory
 from piano_hand.motion.interpolation import cubic_ease, hermite_point
 from piano_hand.motion.keyboard_geometry import KeyboardGeometry
 from piano_hand.motion.trajectory import MotionPhase, MotionPlanner
@@ -116,11 +117,11 @@ def test_chord_fingers_release_at_their_own_note_offsets() -> None:
     assert after_short_release.pressed_keys == [67]
     assert after_short_release.active_fingers == {"right": [5]}
     assert after_short_release.right is not None
-    assert after_short_release.right.fingers[1][-1][1] < short_contact[1] - 10
+    assert after_short_release.right.fingers[1][-1][1] > short_contact[1] + 10
     assert after_short_release.right.fingers[5][-1] == pytest.approx(long_contact)
     assert before_long_release.pressed_keys == [67]
     assert before_long_release.right is not None
-    assert before_long_release.right.fingers[1][-1][1] < short_contact[1] - 10
+    assert before_long_release.right.fingers[1][-1][1] > short_contact[1] + 10
     assert before_long_release.right.fingers[5][-1] == pytest.approx(long_contact)
     assert after_next_press.pressed_keys == [72]
     assert after_next_press.active_fingers == {"right": [5]}
@@ -147,3 +148,58 @@ def test_wrist_moves_smoothly_toward_next_key_cluster() -> None:
     end_x = planner.frame_at(1.5).left.wrist[0]  # type: ignore[union-attr]
 
     assert start_x < middle_x < end_x
+
+
+@pytest.mark.parametrize("hand", [Hand.LEFT, Hand.RIGHT])
+def test_hand_points_from_lower_wrist_toward_keyboard(hand: Hand) -> None:
+    keyboard = KeyboardGeometry.from_pitches(
+        [60, 64, 67],
+        width=800,
+        top=300,
+        white_key_height=240,
+    )
+    factory = HandPoseFactory(keyboard)
+    pose = factory.neutral_pose(hand, center_x=400)
+
+    assert all(points[-1][1] < pose.wrist[1] for points in pose.fingers.values())
+    assert all(points[0][1] < pose.wrist[1] for points in pose.fingers.values())
+
+
+def test_five_fingers_expand_from_rendered_white_key_width() -> None:
+    keyboard = KeyboardGeometry.from_pitches(
+        [60, 64, 67],
+        width=800,
+        top=300,
+        white_key_height=240,
+    )
+    pose = HandPoseFactory(keyboard).neutral_pose(Hand.RIGHT, center_x=400)
+    tips = [pose.fingers[finger][-1][0] for finger in range(1, 6)]
+
+    expected_spacing = keyboard.white_key_width * 0.9
+    assert tips == sorted(tips)
+    for left, right in zip(tips, tips[1:], strict=False):
+        assert right - left == pytest.approx(expected_spacing)
+
+
+def test_single_finger_target_offsets_wrist_toward_hand_center() -> None:
+    keyboard = KeyboardGeometry.from_pitches(
+        [60],
+        width=800,
+        top=300,
+        white_key_height=240,
+    )
+    target = keyboard.contact_point(60)
+    factory = HandPoseFactory(keyboard)
+    thumb_pose = factory.pose_for_targets(
+        Hand.RIGHT,
+        {1: target},
+        pressed=True,
+    )
+    little_finger_pose = factory.pose_for_targets(
+        Hand.RIGHT,
+        {5: target},
+        pressed=True,
+    )
+
+    assert thumb_pose.wrist[0] > target[0]
+    assert little_finger_pose.wrist[0] < target[0]

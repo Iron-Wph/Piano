@@ -40,6 +40,7 @@ class RenderConfig(BaseModel):
     height: int = Field(default=720, ge=240)
     fps: int = Field(default=30, ge=1, le=120)
     theme: Literal["dark", "light"] = "dark"
+    keyboard_mode: Literal["local", "full"] = "local"
     show_finger_numbers: bool = True
     show_measure: bool = True
     show_note_names: bool = False
@@ -68,4 +69,3 @@ class ProjectConfig(BaseModel):
     render: RenderConfig = Field(default_factory=RenderConfig)
     audio: AudioConfig = Field(default_factory=AudioConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
-

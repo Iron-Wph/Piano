@@ -518,6 +518,7 @@ def _render_pipeline(
         width=render_config.width,
         top=keyboard_top,
         white_key_height=keyboard_height,
+        mode=render_config.keyboard_mode,
     )
     motion_plan = MotionPlanner(playback.notes, keyboard)
     frame_renderer = FrameRenderer(keyboard, render_config)

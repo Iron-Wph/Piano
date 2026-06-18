@@ -132,7 +132,7 @@ class MotionPlanner:
             previous_chord = chords[index - 1] if index > 0 else None
             next_chord = chords[index + 1] if index + 1 < len(chords) else None
             targets = self._targets_for_chord(chord)
-            center_x = self.keyboard.cluster_center(note.pitch for note in chord.notes)[0]
+            center_x = self.pose_factory.center_x_for_targets(hand, targets)
             pitches = tuple(sorted(note.pitch for note in chord.notes))
             fingers = tuple(sorted(targets))
             prepare_at = max(0.0, chord.onset - self.prepare_time)

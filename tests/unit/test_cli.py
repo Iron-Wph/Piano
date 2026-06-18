@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 
+import numpy as np
 import pytest
 from typer.testing import CliRunner
 
@@ -21,6 +22,7 @@ from piano_hand.models import (
     OutputConfig,
     PlaybackConfig,
     ProjectConfig,
+    RenderConfig,
     ScoreSource,
     ScoreTimeline,
     ValidationReport,
@@ -406,6 +408,74 @@ def test_render_pipeline_uses_motion_frame_and_encoder_contracts(
 
     assert output.is_file()
     assert captured["shape"] == (720, 1280, 3)
+
+
+def test_render_pipeline_passes_full_keyboard_mode(
+    tmp_path: Path, monkeypatch
+) -> None:
+    resolved = load_resolved_project(create_project(tmp_path))
+    config = resolved.config.model_copy(
+        update={"render": RenderConfig(keyboard_mode="full")}
+    )
+    save_project_config(config, resolved.project_file)
+    resolved = load_resolved_project(resolved.project_file)
+    captured: dict[str, object] = {}
+
+    class FakeKeyboard:
+        width = 1280
+        top = 388.8
+        white_key_height = 307.2
+
+        @classmethod
+        def from_pitches(cls, pitches, **kwargs):
+            list(pitches)
+            captured.update(kwargs)
+            return cls()
+
+    class FakePlanner:
+        duration_sec = 0.5
+
+        def __init__(self, notes, keyboard):
+            pass
+
+        def frame_at(self, time_sec):
+            from piano_hand.models import MotionFrame
+
+            return MotionFrame(time_sec=time_sec)
+
+    class FakeRenderer:
+        def __init__(self, keyboard, render_config):
+            pass
+
+        def render_rgb(self, frame, *, speed):
+            return np.zeros((720, 1280, 3), dtype=np.uint8)
+
+    monkeypatch.setattr(
+        "piano_hand.motion.keyboard_geometry.KeyboardGeometry",
+        FakeKeyboard,
+    )
+    monkeypatch.setattr("piano_hand.motion.trajectory.MotionPlanner", FakePlanner)
+    monkeypatch.setattr(
+        "piano_hand.rendering.frame_renderer.FrameRenderer",
+        FakeRenderer,
+    )
+    monkeypatch.setattr(
+        "piano_hand.rendering.video_encoder.encode_rgb_frames",
+        lambda frames, output_path, **kwargs: Path(output_path),
+    )
+    monkeypatch.setattr(
+        "piano_hand.rendering.audio_renderer.render_timeline_audio",
+        lambda *args, **kwargs: None,
+    )
+
+    cli._render_pipeline(
+        timeline=make_timeline(),
+        project=resolved,
+        output_path=tmp_path / "full.mp4",
+        temp_dir=tmp_path,
+    )
+
+    assert captured["mode"] == "full"
 
 
 def test_doctor_has_stable_failure_exit(monkeypatch, tmp_path: Path) -> None:

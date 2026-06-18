@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import Literal
 
 BLACK_PITCH_CLASSES = frozenset({1, 3, 6, 8, 10})
 WHITE_PITCH_CLASSES = frozenset({0, 2, 4, 5, 7, 9, 11})
 PITCH_CLASS_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+PIANO_LOW_PITCH = 21
+PIANO_HIGH_PITCH = 108
+KeyboardMode = Literal["local", "full"]
 
 
 def is_black_pitch(pitch: int) -> bool:
@@ -75,10 +79,11 @@ class KeyGeometry:
 
 
 class KeyboardGeometry:
-    """A fixed keyboard viewport sized to the score's pitch range.
+    """A fixed local or complete 88-key piano viewport.
 
     Horizontal positions derive from global white-key ranks. This makes the
-    mapping deterministic while allowing a score-specific viewport and scale.
+    mapping deterministic while allowing either a score-specific viewport or
+    the standard A0-C8 piano range.
     """
 
     def __init__(
@@ -90,12 +95,14 @@ class KeyboardGeometry:
         white_key_height: float,
         low_white_pitch: int,
         high_white_pitch: int,
+        mode: KeyboardMode,
     ) -> None:
         self.width = int(width)
         self.top = float(top)
         self.white_key_height = float(white_key_height)
         self.low_white_pitch = low_white_pitch
         self.high_white_pitch = high_white_pitch
+        self.mode = mode
         self._keys = {key.pitch: key for key in keys}
         self.keys = tuple(sorted(self._keys.values(), key=lambda key: (key.is_black, key.pitch)))
 
@@ -111,8 +118,9 @@ class KeyboardGeometry:
         black_width_ratio: float = 0.62,
         black_height_ratio: float = 0.62,
         horizontal_padding: float = 24.0,
+        mode: KeyboardMode = "local",
     ) -> KeyboardGeometry:
-        """Build a fixed viewport with white-key context on each side."""
+        """Build a score-local viewport or the complete standard 88-key piano."""
 
         pitch_list = sorted(set(int(pitch) for pitch in pitches))
         if not pitch_list:
@@ -127,11 +135,30 @@ class KeyboardGeometry:
             raise ValueError("black key ratios must be between zero and one")
         if horizontal_padding < 0 or horizontal_padding * 2 >= width:
             raise ValueError("horizontal_padding leaves no drawable keyboard width")
+        if mode not in {"local", "full"}:
+            raise ValueError(f"unsupported keyboard mode: {mode}")
 
-        first_white = _white_at_or_below(pitch_list[0])
-        last_white = _white_at_or_above(pitch_list[-1])
-        low_rank = max(0, WHITE_RANK[first_white] - context_white_keys)
-        high_rank = min(len(ALL_WHITE_PITCHES) - 1, WHITE_RANK[last_white] + context_white_keys)
+        if mode == "full":
+            outside_piano = [
+                pitch
+                for pitch in pitch_list
+                if not PIANO_LOW_PITCH <= pitch <= PIANO_HIGH_PITCH
+            ]
+            if outside_piano:
+                raise ValueError(
+                    "full keyboard mode supports standard piano pitches "
+                    f"{PIANO_LOW_PITCH}..{PIANO_HIGH_PITCH}; got {outside_piano}"
+                )
+            low_rank = WHITE_RANK[PIANO_LOW_PITCH]
+            high_rank = WHITE_RANK[PIANO_HIGH_PITCH]
+        else:
+            first_white = _white_at_or_below(pitch_list[0])
+            last_white = _white_at_or_above(pitch_list[-1])
+            low_rank = max(0, WHITE_RANK[first_white] - context_white_keys)
+            high_rank = min(
+                len(ALL_WHITE_PITCHES) - 1,
+                WHITE_RANK[last_white] + context_white_keys,
+            )
         low_white = ALL_WHITE_PITCHES[low_rank]
         high_white = ALL_WHITE_PITCHES[high_rank]
         white_count = high_rank - low_rank + 1
@@ -152,7 +179,7 @@ class KeyboardGeometry:
                     width=white_width,
                     height=white_key_height,
                     is_black=False,
-                    contact_point=(x + white_width / 2.0, top + white_key_height * 0.82),
+                    contact_point=(x + white_width / 2.0, top + white_key_height * 0.58),
                 )
             )
 
@@ -185,6 +212,7 @@ class KeyboardGeometry:
             white_key_height=white_key_height,
             low_white_pitch=low_white,
             high_white_pitch=high_white,
+            mode=mode,
         )
 
     @property
@@ -194,6 +222,14 @@ class KeyboardGeometry:
     @property
     def black_keys(self) -> tuple[KeyGeometry, ...]:
         return tuple(key for key in self.keys if key.is_black)
+
+    @property
+    def white_key_width(self) -> float:
+        return self.white_keys[0].width
+
+    @property
+    def bottom(self) -> float:
+        return self.top + self.white_key_height
 
     @property
     def visible_pitches(self) -> tuple[int, ...]:
