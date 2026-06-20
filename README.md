@@ -71,11 +71,11 @@ conda env update -f environment.yml --prune
 
 ### 3. 生成示例视频
 
+默认演示曲是初级双手版《Twinkle, Twinkle, Little Star》。`demo`
+命令默认读取 MusicXML，并固定生成完整 88 键静音视频：
+
 ```bash
-conda run -n piano-hand python -m piano_hand.cli build \
-  examples/two_hand_scale.musicxml \
-  --output work/demo \
-  --mute
+conda run -n piano-hand python -m piano_hand.cli demo
 ```
 
 视频输出位置：
@@ -84,51 +84,59 @@ conda run -n piano-hand python -m piano_hand.cli build \
 work/demo/output.mp4
 ```
 
-再次生成同一个项目时增加 `--force`：
+再次生成时增加 `--force`：
 
 ```bash
-conda run -n piano-hand python -m piano_hand.cli build \
-  examples/two_hand_scale.musicxml \
-  --output work/demo \
-  --mute \
-  --force
+conda run -n piano-hand python -m piano_hand.cli demo --force
 ```
 
-## Linux 生成完整 88 键视频
+### 验证 MIDI 输入
 
-完整键盘模式使用标准钢琴范围 A0–C8，即 MIDI 21–108。
-
-因为 `build` 会立即使用默认配置渲染，所以完整键盘需要分为
-`analyze`、修改配置、`validate` 和 `render` 四步。
+仓库同时提供内容等价的 MIDI 文件。通过 `--format midi` 运行同一首曲目：
 
 ```bash
-# 1. 解析乐谱并创建可编辑项目
-conda run -n piano-hand python -m piano_hand.cli analyze \
-  examples/two_hand_scale.musicxml \
-  --output work/full-keyboard \
-  --mute
-
-# 2. 将局部键盘切换为完整 88 键
-sed -i 's/keyboard_mode: local/keyboard_mode: full/' \
-  work/full-keyboard/project.yaml
-
-# 3. 检查项目配置和指法
-conda run -n piano-hand python -m piano_hand.cli validate \
-  work/full-keyboard
-
-# 4. 渲染视频
-conda run -n piano-hand python -m piano_hand.cli render \
-  work/full-keyboard
+conda run -n piano-hand python -m piano_hand.cli demo \
+  --format midi \
+  --output work/demo-midi
 ```
 
 视频输出位置：
 
 ```text
-work/full-keyboard/output.mp4
+work/demo-midi/output.mp4
 ```
 
-完整键盘包含 88 个键，建议使用 1920×1080 分辨率。编辑
-`work/full-keyboard/project.yaml`：
+两个示例文件都包含 12 小节、54 个音符和相同的双手编配：
+
+- [MusicXML 示例](./examples/twinkle_twinkle_beginner.musicxml)
+- [MIDI 示例](./examples/twinkle_twinkle_beginner.mid)
+- [来源和编配说明](./examples/README.md)
+
+示例旋律依据美国国会图书馆收藏的 1879 年公共领域乐谱记录重新录入，
+并简化为适合本项目演示的右手旋律加左手全音符低音。仓库没有复制第三方
+MIDI 或 MusicXML 编配。原始资料：
+[Library of Congress item 2023832590](https://www.loc.gov/item/2023832590/)。
+
+## Linux 生成自己的完整 88 键视频
+
+完整键盘模式使用标准钢琴范围 A0–C8，即 MIDI 21–108。对自己的乐谱，
+先运行 `analyze`，然后修改 `project.yaml`：
+
+```bash
+conda run -n piano-hand python -m piano_hand.cli analyze \
+  "/path/to/song.musicxml" \
+  --output work/full-keyboard \
+  --mute
+
+sed -i 's/keyboard_mode: local/keyboard_mode: full/' \
+  work/full-keyboard/project.yaml
+
+conda run -n piano-hand python -m piano_hand.cli validate work/full-keyboard
+conda run -n piano-hand python -m piano_hand.cli render work/full-keyboard
+```
+
+完整键盘包含 88 个键，建议使用 1920×1080 分辨率。也可以直接编辑
+`work/full-keyboard/project.yaml` 的 `render` 部分：
 
 ```yaml
 render:
@@ -172,20 +180,7 @@ conda run -n piano-hand python -m piano_hand.cli build \
   --mute
 ```
 
-### 完整 88 键
-
-```bash
-conda run -n piano-hand python -m piano_hand.cli analyze \
-  "/path/to/song.musicxml" \
-  --output work/song-full \
-  --mute
-
-sed -i 's/keyboard_mode: local/keyboard_mode: full/' \
-  work/song-full/project.yaml
-
-conda run -n piano-hand python -m piano_hand.cli validate work/song-full
-conda run -n piano-hand python -m piano_hand.cli render work/song-full
-```
+完整键盘流程见上文“Linux 生成自己的完整 88 键视频”。
 
 ## Windows 快速开始
 
@@ -196,29 +191,18 @@ conda env create -f environment.yml
 conda run -n piano-hand python -m piano_hand.cli doctor --mute
 ```
 
-生成局部键盘示例视频：
+默认生成完整 88 键静音演示视频：
 
 ```powershell
-conda run -n piano-hand python -m piano_hand.cli build `
-  examples\two_hand_scale.musicxml `
-  --output work\demo `
-  --mute
+conda run -n piano-hand python -m piano_hand.cli demo
 ```
 
-生成完整 88 键视频：
+使用 MIDI 版本验证同一首曲目：
 
 ```powershell
-conda run -n piano-hand python -m piano_hand.cli analyze `
-  examples\two_hand_scale.musicxml `
-  --output work\full-keyboard `
-  --mute
-
-(Get-Content work\full-keyboard\project.yaml) `
-  -replace 'keyboard_mode: local', 'keyboard_mode: full' |
-  Set-Content -Encoding utf8 work\full-keyboard\project.yaml
-
-conda run -n piano-hand python -m piano_hand.cli validate work\full-keyboard
-conda run -n piano-hand python -m piano_hand.cli render work\full-keyboard
+conda run -n piano-hand python -m piano_hand.cli demo `
+  --format midi `
+  --output work\demo-midi
 ```
 
 ## 键盘模式
@@ -264,6 +248,10 @@ conda run -n piano-hand python -m piano_hand.cli render work/song
 
 生成音频需要自行准备合法授权的 `.sf2` SoundFont。
 
+> `demo` 命令为了保证开箱即用，固定生成静音视频。需要为同一首内置
+> 《Twinkle, Twinkle, Little Star》生成有声视频时，请使用下面的
+> `build` 命令，并且不要添加 `--mute`。
+
 Linux：
 
 ```bash
@@ -273,8 +261,16 @@ conda run -n piano-hand python -m piano_hand.cli doctor \
   --soundfont "$PIANO_HAND_SOUNDFONT"
 
 conda run -n piano-hand python -m piano_hand.cli build \
-  examples/two_hand_scale.musicxml \
+  examples/twinkle_twinkle_beginner.musicxml \
   --output work/demo-audio
+```
+
+使用 MIDI 示例生成有声视频：
+
+```bash
+conda run -n piano-hand python -m piano_hand.cli build \
+  examples/twinkle_twinkle_beginner.mid \
+  --output work/demo-midi-audio
 ```
 
 Windows PowerShell：
@@ -286,11 +282,43 @@ conda run -n piano-hand python -m piano_hand.cli doctor `
   --soundfont $env:PIANO_HAND_SOUNDFONT
 
 conda run -n piano-hand python -m piano_hand.cli build `
-  examples\two_hand_scale.musicxml `
+  examples\twinkle_twinkle_beginner.musicxml `
   --output work\demo-audio
 ```
 
-使用 `--mute` 时不会生成音频，也不要求提供 SoundFont。
+使用 MIDI 示例：
+
+```powershell
+conda run -n piano-hand python -m piano_hand.cli build `
+  examples\twinkle_twinkle_beginner.mid `
+  --output work\demo-midi-audio
+```
+
+输出文件分别位于：
+
+```text
+work/demo-audio/output.mp4
+work/demo-midi-audio/output.mp4
+```
+
+使用 `--mute` 时不会生成音频，也不要求提供 SoundFont。没有 `--mute`
+时，系统会调用 FluidSynth 将乐谱合成为 WAV，再由 FFmpeg 与视频合并。
+
+可以使用 `ffprobe` 确认输出同时包含视频流和音频流：
+
+```bash
+ffprobe -v error \
+  -show_entries stream=codec_type \
+  -of default=noprint_wrappers=1 \
+  work/demo-audio/output.mp4
+```
+
+正常结果应同时包含：
+
+```text
+codec_type=video
+codec_type=audio
+```
 
 ## 常用命令
 
@@ -299,6 +327,7 @@ analyze   解析乐谱，创建 project.yaml、timeline.json 和 fingering.csv
 validate  检查项目配置、指法、文件路径和依赖
 render    渲染已有项目
 build     依次执行 analyze、validate 和 render
+demo      用内置入门曲生成完整 88 键静音演示视频
 doctor    检查 Python、FFmpeg、FluidSynth、SoundFont 和目录权限
 ```
 
@@ -306,6 +335,7 @@ doctor    检查 Python、FFmpeg、FluidSynth、SoundFont 和目录权限
 
 ```bash
 conda run -n piano-hand python -m piano_hand.cli --help
+conda run -n piano-hand python -m piano_hand.cli demo --help
 conda run -n piano-hand python -m piano_hand.cli render --help
 ```
 
@@ -313,7 +343,7 @@ conda run -n piano-hand python -m piano_hand.cli render --help
 
 ### 输出目录已经存在
 
-`analyze` 和 `build` 默认不会覆盖已有项目。确认允许覆盖后增加：
+`analyze`、`build` 和 `demo` 默认不会覆盖已有项目。确认允许覆盖后增加：
 
 ```text
 --force
@@ -326,6 +356,19 @@ conda run -n piano-hand python -m piano_hand.cli render --help
 ```text
 --mute
 ```
+
+### 有声视频提示缺少 FluidSynth 或 SoundFont
+
+先确认环境和 SoundFont 路径：
+
+```bash
+export PIANO_HAND_SOUNDFONT="/absolute/path/to/piano.sf2"
+conda run -n piano-hand python -m piano_hand.cli doctor \
+  --soundfont "$PIANO_HAND_SOUNDFONT"
+```
+
+`doctor` 中的 `ffmpeg`、`ffprobe`、`fluidsynth` 和 `SoundFont` 都应显示
+`OK`。SoundFont 必须是可读取的 `.sf2` 文件，建议使用绝对路径。
 
 ### 修改了 `project.yaml`，但视频没有变化
 

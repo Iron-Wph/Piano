@@ -59,6 +59,10 @@ app = typer.Typer(
 EXIT_OK = 0
 EXIT_ERROR = 1
 EXIT_WARNINGS = 2
+DEMO_FILENAMES = {
+    "musicxml": "twinkle_twinkle_beginner.musicxml",
+    "midi": "twinkle_twinkle_beginner.mid",
+}
 
 
 @app.command()
@@ -151,6 +155,39 @@ def build(
         rendered = _render_existing(project_file, output=None, keep_temp=keep_temp)
     except Exception as exc:
         _fail(exc)
+    typer.echo(f"Project created: {project_file}")
+    typer.echo(f"Rendered video: {rendered}")
+
+
+@app.command()
+def demo(
+    source_format: Annotated[
+        Literal["musicxml", "midi"],
+        typer.Option(
+            "--format",
+            help="Bundled beginner score format to exercise.",
+        ),
+    ] = "musicxml",
+    output: Annotated[
+        Path,
+        typer.Option("--output", "-o", file_okay=False),
+    ] = Path("work/demo"),
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Allow generated demo files to be replaced."),
+    ] = False,
+    keep_temp: Annotated[bool, typer.Option("--keep-temp")] = False,
+) -> None:
+    """Render the bundled beginner score with a full 88-key silent keyboard."""
+
+    try:
+        source = _demo_source_path(source_format)
+        project_file = _analyze_project(source, output, force=force, mute=True)
+        _configure_demo_project(project_file)
+        rendered = _render_existing(project_file, output=None, keep_temp=keep_temp)
+    except Exception as exc:
+        _fail(exc)
+    typer.echo(f"Demo score: {source}")
     typer.echo(f"Project created: {project_file}")
     typer.echo(f"Rendered video: {rendered}")
 
@@ -317,6 +354,33 @@ def _analyze_project(
         f"Analyzed {len(timeline.notes)} notes in {time.perf_counter() - started:.2f}s"
     )
     return project_file
+
+
+def _demo_source_path(source_format: Literal["musicxml", "midi"]) -> Path:
+    filename = DEMO_FILENAMES[source_format]
+    source = Path(__file__).resolve().parent.parent / "examples" / filename
+    if not source.is_file():
+        raise PianoHandError(
+            ErrorCode.INPUT_ERROR,
+            f"Bundled demo score is unavailable: {source}",
+            "Run the demo command from a complete Piano Hand repository checkout.",
+        )
+    return source
+
+
+def _configure_demo_project(project_file: Path) -> None:
+    resolved = load_resolved_project(project_file)
+    config = resolved.config.model_copy(
+        update={
+            "render": resolved.config.render.model_copy(
+                update={"keyboard_mode": "full"}
+            ),
+            "audio": resolved.config.audio.model_copy(
+                update={"enabled": False, "soundfont_path": None}
+            ),
+        }
+    )
+    save_project_config(config, project_file)
 
 
 def _validate_and_write(

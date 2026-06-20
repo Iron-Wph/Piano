@@ -478,6 +478,54 @@ def test_render_pipeline_passes_full_keyboard_mode(
     assert captured["mode"] == "full"
 
 
+@pytest.mark.parametrize(
+    ("source_format", "input_type", "suffix"),
+    [
+        ("musicxml", "musicxml", ".musicxml"),
+        ("midi", "midi", ".mid"),
+    ],
+)
+def test_demo_defaults_to_full_keyboard_and_muted_audio(
+    tmp_path: Path,
+    monkeypatch,
+    source_format: str,
+    input_type: str,
+    suffix: str,
+) -> None:
+    output = tmp_path / source_format
+    captured: dict[str, object] = {}
+
+    def fake_render(project, *, output, keep_temp):
+        resolved = load_resolved_project(project)
+        captured["config"] = resolved.config
+        captured["source_suffix"] = resolved.input_path.suffix
+        target = resolved.video_path
+        target.write_bytes(b"x" * 2048)
+        return target
+
+    monkeypatch.setattr(cli, "_render_existing", fake_render)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "demo",
+            "--format",
+            source_format,
+            "--output",
+            str(output),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    config = captured["config"]
+    assert isinstance(config, ProjectConfig)
+    assert config.input.type == input_type
+    assert config.render.keyboard_mode == "full"
+    assert config.audio.enabled is False
+    assert config.audio.soundfont_path is None
+    assert captured["source_suffix"] == suffix
+
+
 def test_doctor_has_stable_failure_exit(monkeypatch, tmp_path: Path) -> None:
     issue = Issue(
         code="MISSING_FFMPEG",
